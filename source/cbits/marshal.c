@@ -5,16 +5,16 @@
 
 #include "marshal.h"
 
+#include <stdio.h>
+
 struct sockaddr* get_candidate_addr (NiceCandidate* cand) {
-  struct sockaddr* buf;
-  buf = malloc(sizeof(struct sockaddr));
+  struct sockaddr* buf = malloc(sizeof(struct sockaddr_storage));
   nice_address_copy_to_sockaddr(&(cand->addr), buf);
   return buf;
 }
 
 struct sockaddr* get_candidate_base_addr (NiceCandidate* cand) {
-  struct sockaddr* buf;
-  buf = malloc(sizeof(struct sockaddr));
+  struct sockaddr* buf = malloc(sizeof(struct sockaddr_storage));
   nice_address_copy_to_sockaddr(&(cand->base_addr), buf);
   return buf;
 }

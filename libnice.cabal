@@ -17,6 +17,7 @@ cabal-version:       >=1.8
 library
   exposed-modules:     Network.Ice.NiceAgent
                      , Network.Ice.NiceCandidate
+                     , Network.Ice.Utils
   other-modules:       Network.Ice.Signals
   build-depends:       base >= 4.5
                        , glib >= 0.12
@@ -31,4 +32,8 @@ library
 Executable test
   main-is: Network/Ice/Test.hs
   hs-source-dirs:      source
-  build-depends: base, glib, libnice
+  ghc-options:  -threaded
+  build-depends: base
+                 , glib
+                 , libnice
+                 , network

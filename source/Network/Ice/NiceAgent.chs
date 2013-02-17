@@ -3,27 +3,38 @@
 module Network.Ice.NiceAgent where
 
 import Control.Applicative ((<$>))
-import Data.ByteString (ByteString)
+import Data.ByteString (ByteString, packCStringLen)
 import Data.ByteString.Unsafe (unsafeUseAsCStringLen)
 import Data.Word
 import Foreign.C
 import Foreign.ForeignPtr
 import Foreign.Marshal
+import Foreign.Marshal.Utils
 import Foreign.Ptr
 import Foreign.Storable
 import Control.Concurrent
+import Control.Monad
 
 import System.Glib.GObject
 import System.Glib.Properties
 import System.Glib.Attributes
 import System.Glib.GList
+import System.Glib.MainLoop
 
 import Network.Ice.Signals
 import Network.Ice.NiceCandidate
+import Network.Ice.Utils
 
 #include <nice/agent.h>
+#include "marshal.h"
 
 {#context lib="libnice" prefix="nice" #}
+
+{# fun nice_debug_enable as ^
+    {`Bool'
+    }
+    -> `()' #}
+
 {#enum Compatibility as Compatibility {underscoreToCase} deriving (Eq, Show, Read, Bounded) #}
 
 type RecvFun = Ptr () -> CUInt -> CUInt -> CUInt -> Ptr CChar -> Ptr () -> IO ()
@@ -38,11 +49,12 @@ instance GObjectClass NiceAgent where
     toGObject = GObject . castForeignPtr . unNiceAgent
     unsafeCastGObject = NiceAgent . castForeignPtr . unGObject
 
-newNiceAgent :: Compatibility -> IO NiceAgent
-newNiceAgent compat = constructNewGObject
+niceAgentNew :: Compatibility -> MainContext -> IO NiceAgent
+niceAgentNew compat ctx = withForeignPtr (fromMainContext ctx) $ \p ->
+                          constructNewGObject
                         (NiceAgent, objectUnref)
                         (castPtr <$> {# call nice_agent_new #}
-                                 nullPtr
+                                 (castPtr p)
                                  (fromIntegral $ fromEnum compat))
 
 -- nice_agent_add_local_address
@@ -55,6 +67,9 @@ newNiceAgent compat = constructNewGObject
 
 -- nice_agent_set_relay_info
 
+
+-- | You HAVE to call attachReceive before running this, otherwise stun messages
+-- can't be received
 {# fun nice_agent_gather_candidates as ^
     {withNiceAgent* `NiceAgent', `Int'} -> `Bool' #}
 
@@ -97,12 +112,16 @@ unGsListify x = do
   }
   -> `[NiceCandidate]' unGsListify* #}
 
+unGsListify' x = do
+  ptrs <- fromGSList x
+  mapM (\p -> peek p >>= \x -> return x)  ptrs
+
 {# fun nice_agent_get_local_candidates as ^
   { withNiceAgent* `NiceAgent'
   , `Int'
   , `Int'
   }
-  -> `[NiceCandidate]' unGsListify* #}
+  -> `[NiceCandidate]' unGsListify'* #}
 
 useAsCStringLen' bs f = unsafeUseAsCStringLen bs
                            (f . \(x,y) -> (fromIntegral y,x))
@@ -118,19 +137,65 @@ useAsCStringLen' bs f = unsafeUseAsCStringLen bs
 dataP = ($ nullPtr)
 
 foreign import ccall "wrapper"
-  mkRecvFun :: RecvFun -> IO (FunPtr RecvFun)
+    mkRecvFun :: RecvFun -> IO (FunPtr RecvFun)
 
-{# fun nice_agent_attach_recv as ^
+withMainContext ctx f  = withForeignPtr (fromMainContext ctx) $ f . castPtr
+
+{# fun nice_agent_attach_recv as niceAgentAttachRecv'
   { withNiceAgent* `NiceAgent'
   , `Int'
   , `Int'
-  , id `Ptr ()'
+  , withMainContext* `MainContext'
   , id `FunPtr RecvFun'
   , dataP- `Ptr ()'
   }
   -> `Bool' #}
 
+attachReceive agent sid cid ctx f = do
+  let f' _agent _sid _cid len buf _userData = do
+              bs <- packCStringLen (buf, fromIntegral len)
+              f bs
+  fp <- mkRecvFun f'
+  niceAgentAttachRecv' agent sid cid ctx fp
+
+{# fun nice_agent_set_selected_pair as ^
+   { withNiceAgent* `NiceAgent'
+   , `Int'
+   , `Int'
+   , `String'
+   , `String'
+   }
+   -> `Bool' #}
+
+withCandidate c f = with c (f . castPtr)
+
+{# fun nice_agent_set_selected_remote_candidate as ^
+   { withNiceAgent* `NiceAgent'
+   , `Int'
+   , `Int'
+   , withCandidate* `NiceCandidate'
+   }
+   -> `Bool' #}
 -- Signals
+
+{# fun nice_agent_set_stream_tos as ^
+  { withNiceAgent* `NiceAgent'
+  , `Int'
+  , `Int'
+  }
+  -> `()' #}
+
+{# fun nice_agent_set_software as ^
+  { withNiceAgent* `NiceAgent'
+  , `String'
+  }
+  -> `()' #}
+
+{# fun nice_agent_restart as ^
+  { withNiceAgent* `NiceAgent'
+  }
+  -> `Bool' #}
+
 
 candidateGatheringDone :: Signal NiceAgent (Word -> IO ())
 candidateGatheringDone = Signal (connect_WORD__NONE "candidate-gathering-done")

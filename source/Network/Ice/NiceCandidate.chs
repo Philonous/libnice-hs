@@ -36,16 +36,24 @@ data NiceCandidate = NiceCandidate
   , streamId :: Int
   , componentId :: Int
   , foundation :: String
-  , username :: String
-  , password :: String
+  , username :: Maybe String
+  , password :: Maybe String
   , turn :: TurnServer
   , sockPtr :: Ptr ()
-  }
+  } deriving Show
 
 enum :: (Monad m, Integral i, Enum e)  => m i -> m e
 enum = liftM $ toEnum . fromIntegral
 
+mbPeekCString p = do
+    mbstr <- if p == nullPtr
+                 then return Nothing
+                 else Just `fmap` peekCString p
+    free p
+    return mbstr
 
+mbNewCString Nothing = return nullPtr
+mbNewCString (Just x) = newCString x
 
 instance Storable NiceCandidate where
     sizeOf _ = {# sizeof NiceCandidateType #}
@@ -54,15 +62,15 @@ instance Storable NiceCandidate where
                <$> enum ({# get NiceCandidate->type      #} p)
                <*> enum ({# get NiceCandidate->transport #} p)
                <*> (peekSockAddr . castPtr
-                      =<< {# call get_candidate_addr #} (castPtr p))
+                     =<< {# call get_candidate_addr #} (castPtr p))
                <*> (peekSockAddr . castPtr
-                      =<< {# call get_candidate_base_addr #} (castPtr p))
+                     =<< {# call get_candidate_base_addr #} (castPtr p))
                <*> (fromIntegral <$> {# get NiceCandidate->priority #} p)
                <*> (fromIntegral <$> {# get NiceCandidate->stream_id #} p)
                <*> (fromIntegral <$> {# get NiceCandidate->component_id #} p)
-               <*> (peekCString =<< {# get NiceCandidate->foundation #} p)
-               <*> (peekCString =<< {# get NiceCandidate->username #} p)
-               <*> (peekCString =<< {# get NiceCandidate->password #} p)
+               <*> (peekCString . castPtr $ p `plusPtr` 76)
+               <*> (mbPeekCString =<< {# get NiceCandidate->username #} p)
+               <*> (mbPeekCString =<< {# get NiceCandidate->password #} p)
                <*> {# get NiceCandidate->turn #} p
                <*> {# get NiceCandidate->sockptr #} p
     poke p NiceCandidate{..} = do
@@ -78,7 +86,7 @@ instance Storable NiceCandidate where
         {# set NiceCandidate->component_id #} p $ fromIntegral componentId
         withCString foundation $ \pa ->
             {#call set_foundation #} (castPtr p) (castPtr pa)
-        {# set NiceCandidate->username #} p =<< newCString username
-        {# set NiceCandidate->password #} p =<< newCString password
+        {# set NiceCandidate->username #} p =<< mbNewCString username
+        {# set NiceCandidate->password #} p =<< mbNewCString password
         {# set NiceCandidate->turn #} p turn
         {# set NiceCandidate->sockptr #} p sockPtr
