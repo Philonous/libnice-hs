@@ -55,16 +55,26 @@ mbPeekCString p = do
 mbNewCString Nothing = return nullPtr
 mbNewCString (Just x) = newCString x
 
+candidateAddress p = do
+    addrPtr <- {# call get_candidate_addr #} (castPtr p)
+    addr <- peekSockAddr $ castPtr addrPtr
+    free addrPtr
+    return addr
+
+candidateBaseAddress p = do
+    addrPtr <- {# call get_candidate_base_addr #} (castPtr p)
+    addr <- peekSockAddr $ castPtr addrPtr
+    free addrPtr
+    return addr
+
 instance Storable NiceCandidate where
     sizeOf _ = {# sizeof NiceCandidateType #}
     alignment _ = {# alignof NiceCandidateType #}
     peek p = NiceCandidate
                <$> enum ({# get NiceCandidate->type      #} p)
                <*> enum ({# get NiceCandidate->transport #} p)
-               <*> (peekSockAddr . castPtr
-                     =<< {# call get_candidate_addr #} (castPtr p))
-               <*> (peekSockAddr . castPtr
-                     =<< {# call get_candidate_base_addr #} (castPtr p))
+               <*> candidateAddress p
+               <*> candidateBaseAddress p
                <*> (fromIntegral <$> {# get NiceCandidate->priority #} p)
                <*> (fromIntegral <$> {# get NiceCandidate->stream_id #} p)
                <*> (fromIntegral <$> {# get NiceCandidate->component_id #} p)
