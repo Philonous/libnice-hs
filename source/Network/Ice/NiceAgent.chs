@@ -28,14 +28,15 @@ import Network.Ice.Utils
 #include <nice/agent.h>
 #include "marshal.h"
 
-{#context lib="libnice" prefix="nice" #}
+{#context lib="libnice" prefix="nice_agent" #}
 
 {# fun nice_debug_enable as ^
     {`Bool'
     }
     -> `()' #}
 
-{#enum Compatibility as Compatibility {underscoreToCase} deriving (Eq, Show, Read, Bounded) #}
+{#enum NiceCompatibility as Compatibility {underscoreToCase} with prefix="nice"
+   deriving (Eq, Show, Read, Bounded) #}
 
 type RecvFun = Ptr () -> CUInt -> CUInt -> CUInt -> Ptr CChar -> Ptr () -> IO ()
 
@@ -59,18 +60,17 @@ niceAgentNew compat ctx = withForeignPtr (fromMainContext ctx) $ \p ->
 
 -- nice_agent_add_local_address
 
-{# fun nice_agent_add_stream as ^
+{# fun add_stream as ^
     {withNiceAgent* `NiceAgent', `Int'} -> `Int' #}
 
-{# fun nice_agent_remove_stream as ^
+{# fun remove_stream as ^
     {withNiceAgent* `NiceAgent', `Int'} -> `()' #}
 
 -- nice_agent_set_relay_info
 
-
 -- | You HAVE to call attachReceive before running this, otherwise stun messages
 -- can't be received
-{# fun nice_agent_gather_candidates as ^
+{# fun gather_candidates as ^
     {withNiceAgent* `NiceAgent', `Int'} -> `Bool' #}
 
 peekGString x = do
@@ -79,10 +79,10 @@ peekGString x = do
   {#call g_free #} $ castPtr strp
   return str
 
-{# fun nice_agent_set_remote_credentials as ^
+{# fun set_remote_credentials as ^
     { withNiceAgent* `NiceAgent', `Int', `String', `String'} -> `Bool' #}
 
-{# fun nice_agent_get_local_credentials as ^
+{# fun get_local_credentials as ^
     { withNiceAgent* `NiceAgent'
     , `Int'
     , alloca- `String' peekGString*
@@ -93,7 +93,7 @@ gsListify xs f = do
   ptrs <- mapM new xs
   withGSList ptrs f
 
-{# fun nice_agent_set_remote_candidates as ^
+{# fun set_remote_candidates as ^
    { withNiceAgent* `NiceAgent'
    , `Int'
    , `Int'
@@ -105,7 +105,7 @@ unGsListify x = do
   ptrs <- fromGSList x
   mapM peek ptrs
 
-{# fun nice_agent_get_remote_candidates as ^
+{# fun get_remote_candidates as ^
   { withNiceAgent* `NiceAgent'
   , `Int'
   , `Int'
@@ -114,9 +114,13 @@ unGsListify x = do
 
 unGsListify' x = do
   ptrs <- fromGSList x
-  mapM (\p -> peek p >>= \x -> return x)  ptrs
+  mapM (\p ->do
+             x <- peek p
+             -- free p -- TODO: Why does this crash?
+             return x
+       )  ptrs
 
-{# fun nice_agent_get_local_candidates as ^
+{# fun get_local_candidates as ^
   { withNiceAgent* `NiceAgent'
   , `Int'
   , `Int'
@@ -126,7 +130,7 @@ unGsListify' x = do
 useAsCStringLen' bs f = unsafeUseAsCStringLen bs
                            (f . \(x,y) -> (fromIntegral y,x))
 
-{# fun nice_agent_send as ^
+{# fun nice_agent_send as send
   { withNiceAgent* `NiceAgent'
   , `Int'
   , `Int'
@@ -141,7 +145,7 @@ foreign import ccall "wrapper"
 
 withMainContext ctx f  = withForeignPtr (fromMainContext ctx) $ f . castPtr
 
-{# fun nice_agent_attach_recv as niceAgentAttachRecv'
+{# fun attach_recv as niceAgentAttachRecv'
   { withNiceAgent* `NiceAgent'
   , `Int'
   , `Int'
@@ -158,7 +162,7 @@ attachReceive agent sid cid ctx f = do
   fp <- mkRecvFun f'
   niceAgentAttachRecv' agent sid cid ctx fp
 
-{# fun nice_agent_set_selected_pair as ^
+{# fun set_selected_pair as ^
    { withNiceAgent* `NiceAgent'
    , `Int'
    , `Int'
@@ -169,33 +173,33 @@ attachReceive agent sid cid ctx f = do
 
 withCandidate c f = with c (f . castPtr)
 
-{# fun nice_agent_set_selected_remote_candidate as ^
+{# fun set_selected_remote_candidate as ^
    { withNiceAgent* `NiceAgent'
    , `Int'
    , `Int'
    , withCandidate* `NiceCandidate'
    }
    -> `Bool' #}
--- Signals
 
-{# fun nice_agent_set_stream_tos as ^
+{# fun set_stream_tos as ^
   { withNiceAgent* `NiceAgent'
   , `Int'
   , `Int'
   }
   -> `()' #}
 
-{# fun nice_agent_set_software as ^
+{# fun set_software as ^
   { withNiceAgent* `NiceAgent'
   , `String'
   }
   -> `()' #}
 
-{# fun nice_agent_restart as ^
+{# fun restart as ^
   { withNiceAgent* `NiceAgent'
   }
   -> `Bool' #}
 
+-- Signals
 
 candidateGatheringDone :: Signal NiceAgent (Word -> IO ())
 candidateGatheringDone = Signal (connect_WORD__NONE "candidate-gathering-done")

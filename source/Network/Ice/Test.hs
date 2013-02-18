@@ -18,7 +18,7 @@ import Network.Ice.NiceAgent
 import Network.Ice.NiceCandidate
 import Network.Ice.Utils
 
-main = do
+main1 = do
     putStrLn "test running"
     glibTypeInit
 --    niceDebugEnable True
@@ -37,13 +37,13 @@ main = do
                                        putStrLn "all candidats printed"
                                        putMVar gatherWait ()
                                  )
-    niceAgentAddStream ag 1
+    addStream ag 1
     attachReceive ag 1 1 (mainLoopGetContext ml) (\_ -> return ())
-    niceAgentGatherCandidates ag 1
+    gatherCandidates ag 1
     forkIO $ mainLoopRun ml
     putStrLn "main loop running"
     takeMVar gatherWait
-    cands <- niceAgentGetLocalCandidates ag 1 1
+    cands <- getLocalCandidates ag 1 1
     mapM print cands
     -- cbCandidateGatheringDone ag 1
 
@@ -62,7 +62,9 @@ testCandidate = NiceCandidate { candidateType = CandidateTypeHost
                               , sockPtr = nullPtr
                               }
 
-main' = do
+main2 = do
     with testCandidate $ \p -> print =<< peek p
+
+main = main2
 
 --    mainLoopRun ml
