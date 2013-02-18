@@ -1,1 +1,50 @@
 module Network.Ice
+  ( niceAgent
+  , addStream
+  , removeStream
+  , gatherCandidates
+  , setRemoteCredentials
+  , new
+  , getLocalCredentials
+  , setRemoteCandidates
+  , getRemoteCandidates
+  , getLocalCandidates
+  , send
+  , attachReceive
+  , setSelectedPair
+  , setSelectedRemoteCandidate
+  , setStreamTos
+  , setSoftware
+  , restart
+-- * Signals
+  , candidateGatheringDone
+  , candidateGatheringDone
+  , componentStateChanged
+  , initialBindingrequestReceived
+  , newCandidate
+  , newRemotecandidate
+  , newSelectedPair
+  , reliableTransportWritable
+-- * Properties
+  , compatibility
+  , controllingMode
+  , fullMode
+  , maxConnectivityChecks
+  , proxyIp
+  , proxyPassword
+  , proxyPort
+  , proxyType
+  , proxyUsername
+  , reliable
+  , stunPacingtimer
+  , stunServer
+  , stunServerPort
+  , upnp
+  , upnpTimeout
+  ,
+  , NiceCandidate(..)
+  ,  niceDebugEnable
+  ) where
+
+import Network.Ice.NiceAgent
+import Network.Ice.NiceCandidate
