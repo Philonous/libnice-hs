@@ -55,17 +55,24 @@ mbPeekCString p = do
 mbNewCString Nothing = return nullPtr
 mbNewCString (Just x) = newCString x
 
-candidateAddress p = do
-    addrPtr <- {# call get_candidate_addr #} (castPtr p)
-    addr <- peekSockAddr $ castPtr addrPtr
-    free addrPtr
-    return addr
+candidateBaseAddress p = undefined
 
-candidateBaseAddress p = do
-    addrPtr <- {# call get_candidate_base_addr #} (castPtr p)
-    addr <- peekSockAddr $ castPtr addrPtr
-    free addrPtr
-    return addr
+allocaSAStorage = allocaBytes {# sizeof sa_storage #}
+getSockAddr = peekSockAddr . castPtr
+
+withSockAddr' sa f = withSockAddr sa (\p _ -> f $ castPtr p)
+
+{# fun nice_address_copy_to_sockaddr as ^
+   { id `Ptr ()'
+   , allocaSAStorage- `SockAddr' getSockAddr*
+   }
+   -> `()' #}
+
+{# fun nice_address_set_from_sockaddr as ^
+   { id `Ptr ()'
+   , withSockAddr'* `SockAddr'
+   }
+   -> `()' #}
 
 instance Storable NiceCandidate where
     sizeOf _ = {# sizeof NiceCandidateType #}
@@ -73,12 +80,15 @@ instance Storable NiceCandidate where
     peek p = NiceCandidate
                <$> enum ({# get NiceCandidate->type      #} p)
                <*> enum ({# get NiceCandidate->transport #} p)
-               <*> candidateAddress p
-               <*> candidateBaseAddress p
+               <*> (niceAddressCopyToSockaddr =<<
+                      {# ptrto NiceCandidate->addr #} p)
+               <*> (niceAddressCopyToSockaddr =<<
+                      {# ptrto NiceCandidate->base_addr #} p)
                <*> (fromIntegral <$> {# get NiceCandidate->priority #} p)
                <*> (fromIntegral <$> {# get NiceCandidate->stream_id #} p)
                <*> (fromIntegral <$> {# get NiceCandidate->component_id #} p)
-               <*> (peekCString . castPtr $ p `plusPtr` 76)
+               <*> (peekCString . castPtr
+                       =<< {# ptrto NiceCandidate->foundation #} p)
                <*> (mbPeekCString =<< {# get NiceCandidate->username #} p)
                <*> (mbPeekCString =<< {# get NiceCandidate->password #} p)
                <*> {# get NiceCandidate->turn #} p
@@ -87,10 +97,10 @@ instance Storable NiceCandidate where
         {# set NiceCandidate->type #} p . fromIntegral . fromEnum $ candidateType
         {# set NiceCandidate->transport #} p . fromIntegral . fromEnum
             $ candidateTransport
-        withSockAddr address $ \pa _ ->
-            {# call set_candidate_addr #} (castPtr p) (castPtr pa)
-        withSockAddr baseAddress $ \pa _ ->
-            {# call set_candidate_base_addr #} (castPtr p) (castPtr pa)
+        addrP <- castPtr `fmap` {# ptrto NiceCandidate->addr #} p
+        niceAddressSetFromSockaddr addrP  address
+        baseAddrP <- castPtr `fmap` {# ptrto NiceCandidate->base_addr #} p
+        niceAddressSetFromSockaddr baseAddrP  baseAddress
         {# set NiceCandidate->priority #} p $ fromIntegral priority
         {# set NiceCandidate->stream_id #} p $ fromIntegral streamId
         {# set NiceCandidate->component_id #} p $ fromIntegral componentId
