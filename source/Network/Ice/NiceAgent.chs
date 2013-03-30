@@ -1,5 +1,6 @@
 {-# LANGUAGE ForeignFunctionInterface #-}
 {-# LANGUAGE NoMonomorphismRestriction #-}
+{-# OPTIONS_HADDOCK hide #-}
 module Network.Ice.NiceAgent where
 
 import Control.Applicative ((<$>))
@@ -35,8 +36,8 @@ import Network.Ice.Utils
     }
     -> `()' #}
 
-{#enum NiceCompatibility as Compatibility {underscoreToCase} with prefix="nice"
-   deriving (Eq, Show, Read, Bounded) #}
+{#enum NiceCompatibility as Compatibility {underscoreToCase}
+   with prefix="nice_compatibility" deriving (Eq, Show, Read) #}
 
 type RecvFun = Ptr () -> CUInt -> CUInt -> CUInt -> Ptr CChar -> Ptr () -> IO ()
 
@@ -68,7 +69,7 @@ niceAgentNew compat ctx = withForeignPtr (fromMainContext ctx) $ \p ->
 
 -- nice_agent_set_relay_info
 
--- | You HAVE to call attachReceive before running this, otherwise stun messages
+-- | You HAVE to call 'attachReceive' before running this, otherwise stun messages
 -- can't be received
 {# fun gather_candidates as ^
     {withNiceAgent* `NiceAgent', `Int'} -> `Bool' #}
@@ -170,8 +171,6 @@ attachReceive agent sid cid ctx f = do
    , `String'
    }
    -> `Bool' #}
-
-withCandidate c f = with c (f . castPtr)
 
 {# fun set_selected_remote_candidate as ^
    { withNiceAgent* `NiceAgent'

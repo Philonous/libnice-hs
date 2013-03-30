@@ -1,4 +1,5 @@
 {-# LANGUAGE ForeignFunctionInterface #-}
+{-# OPTIONS_HADDOCK hide #-}
 
 module Network.Ice.Utils where
 

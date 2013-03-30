@@ -2,6 +2,7 @@
 {-# LANGUAGE NoMonomorphismRestriction #-}
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# OPTIONS_HADDOCK hide #-}
 module Network.Ice.NiceCandidate where
 
 import Network.Socket
@@ -12,6 +13,7 @@ import Foreign.Storable
 import Control.Applicative
 import Control.Monad
 import Foreign.C
+import Data.Maybe (fromJust)
 
 #include <nice/agent.h>
 #include <marshal.h>
@@ -19,6 +21,7 @@ import Foreign.C
 {#context lib="libnice" prefix="nice" #}
 
 {# enum NiceCandidateType as NiceCandidateType {underscoreToCase}
+    with prefix="NICE_CANDIDATE_TYPE"
     deriving (Eq, Show, Read, Bounded) #}
 
 {# enum NiceCandidateTransport {underscoreToCase}
@@ -31,7 +34,7 @@ data NiceCandidate = NiceCandidate
   { candidateType :: NiceCandidateType
   , candidateTransport :: NiceCandidateTransport
   , address :: SockAddr
-  , baseAddress :: SockAddr
+  , baseAddress :: Maybe SockAddr
   , priority :: Integer
   , streamId :: Int
   , componentId :: Int
@@ -57,16 +60,31 @@ mbNewCString (Just x) = newCString x
 
 candidateBaseAddress p = undefined
 
-allocaSAStorage = allocaBytes {# sizeof sa_storage #}
-getSockAddr = peekSockAddr . castPtr
-
 withSockAddr' sa f = withSockAddr sa (\p _ -> f $ castPtr p)
 
-{# fun nice_address_copy_to_sockaddr as ^
+type SizeT = {# type size_t #}
+
+foreign import ccall safe "memset"
+    memset :: Ptr () -> CInt -> SizeT -> IO (Ptr ())
+
+withCandidate :: Storable s => s -> (Ptr () -> IO b) -> IO b
+withCandidate c f = alloca $ \p -> do
+  memset (castPtr p) 0 {#sizeof NiceCandidate #}
+  poke p c
+  f $ castPtr p
+
+{# fun copy_to_sockaddr_check as ^
    { id `Ptr ()'
-   , allocaSAStorage- `SockAddr' getSockAddr*
+   , id `Ptr ()'
    }
-   -> `()' #}
+   -> `CInt' id #}
+
+getNiceAddress na = allocaBytes {# sizeof sa_storage #} $ \p -> do
+        nnul <- copyToSockaddrCheck na p
+        if nnul > 0
+            then Just <$> peekSockAddr (castPtr p)
+            else return Nothing
+
 
 {# fun nice_address_set_from_sockaddr as ^
    { id `Ptr ()'
@@ -80,9 +98,9 @@ instance Storable NiceCandidate where
     peek p = NiceCandidate
                <$> enum ({# get NiceCandidate->type      #} p)
                <*> enum ({# get NiceCandidate->transport #} p)
-               <*> (niceAddressCopyToSockaddr =<<
+               <*> (fmap fromJust . getNiceAddress =<<
                       {# ptrto NiceCandidate->addr #} p)
-               <*> (niceAddressCopyToSockaddr =<<
+               <*> (getNiceAddress =<<
                       {# ptrto NiceCandidate->base_addr #} p)
                <*> (fromIntegral <$> {# get NiceCandidate->priority #} p)
                <*> (fromIntegral <$> {# get NiceCandidate->stream_id #} p)
@@ -100,7 +118,9 @@ instance Storable NiceCandidate where
         addrP <- castPtr `fmap` {# ptrto NiceCandidate->addr #} p
         niceAddressSetFromSockaddr addrP  address
         baseAddrP <- castPtr `fmap` {# ptrto NiceCandidate->base_addr #} p
-        niceAddressSetFromSockaddr baseAddrP  baseAddress
+        case baseAddress of
+            Nothing -> return ()
+            Just ba -> niceAddressSetFromSockaddr baseAddrP ba
         {# set NiceCandidate->priority #} p $ fromIntegral priority
         {# set NiceCandidate->stream_id #} p $ fromIntegral streamId
         {# set NiceCandidate->component_id #} p $ fromIntegral componentId

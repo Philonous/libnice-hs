@@ -15,7 +15,8 @@ build-type:          Simple
 cabal-version:       >=1.8
 
 library
-  exposed-modules:     Network.Ice.NiceAgent
+  exposed-modules:     Network.Ice
+                     , Network.Ice.NiceAgent
                      , Network.Ice.NiceCandidate
                      , Network.Ice.Utils
   other-modules:       Network.Ice.Signals

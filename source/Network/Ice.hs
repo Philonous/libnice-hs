@@ -1,10 +1,11 @@
 module Network.Ice
-  ( niceAgent
+  ( NiceAgent
+  , Compatibility(..)
+  , niceAgentNew
   , addStream
   , removeStream
   , gatherCandidates
   , setRemoteCredentials
-  , new
   , getLocalCredentials
   , setRemoteCandidates
   , getRemoteCandidates
@@ -17,7 +18,6 @@ module Network.Ice
   , setSoftware
   , restart
 -- * Signals
-  , candidateGatheringDone
   , candidateGatheringDone
   , componentStateChanged
   , initialBindingrequestReceived
@@ -41,9 +41,11 @@ module Network.Ice
   , stunServerPort
   , upnp
   , upnpTimeout
-  ,
+-- * Candidates
   , NiceCandidate(..)
-  ,  niceDebugEnable
+  , NiceCandidateType(..)
+  , NiceCandidateTransport(..)
+  , niceDebugEnable
   ) where
 
 import Network.Ice.NiceAgent

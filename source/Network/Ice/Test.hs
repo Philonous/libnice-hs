@@ -24,7 +24,7 @@ main1 = do
 --    niceDebugEnable True
     ml <- mainLoopNew Nothing True
     putStrLn "loop is running"
-    ag <- niceAgentNew CompatibilityRfc5245 (mainLoopGetContext ml)
+    ag <- niceAgentNew Rfc5245 (mainLoopGetContext ml)
     set ag [ stunServer := "132.177.123.6"
            , stunServerPort := 3478
            ]
@@ -48,10 +48,10 @@ main1 = do
     -- cbCandidateGatheringDone ag 1
 
 
-testCandidate = NiceCandidate { candidateType = CandidateTypeHost
+testCandidate = NiceCandidate { candidateType = Host
                               , candidateTransport = CandidateTransportUdp
                               , address = SockAddrInet 123 1
-                              , baseAddress = SockAddrInet 321 145
+                              , baseAddress = Just (SockAddrInet 321 145)
                               , priority = 99
                               , streamId = 1
                               , componentId = 1
